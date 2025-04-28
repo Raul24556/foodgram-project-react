@@ -1,73 +1,78 @@
 from django.contrib.auth.models import AbstractUser
+from django.core.validators import EmailValidator, RegexValidator
 from django.db import models
 
-from .constants import MAX_LENGTH_EMAIL, MAX_LENGTH_NAME
+from core.constants import EMAIL_LENGTH, USER_NAME_LENGTH
+from users.validators import check_me_in_username
 
 
 class User(AbstractUser):
-    """Кастомная модель пользователя."""
+    USERNAME_FIELD = 'email'
+    REQUIRED_FIELDS = ["username", "first_name", "last_name", "password"]
 
-    email = models.EmailField(
-        'Электронная почта',
-        unique=True,
-        max_length=MAX_LENGTH_EMAIL,
-    )
     first_name = models.CharField(
         'Имя',
-        max_length=MAX_LENGTH_NAME,
+        max_length=USER_NAME_LENGTH
     )
     last_name = models.CharField(
         'Фамилия',
-        max_length=MAX_LENGTH_NAME,
+        max_length=USER_NAME_LENGTH
+    )
+    email = models.EmailField(
+        'Адрес электронной почты',
+        max_length=EMAIL_LENGTH,
+        unique=True,
+        validators=(EmailValidator,)
     )
     username = models.CharField(
-        'Имя пользователя',
-        max_length=MAX_LENGTH_NAME,
-        unique=True,
+        'username',
+        max_length=USER_NAME_LENGTH,
+        unique=True, validators=[
+            RegexValidator(
+                regex=r'^[a-zA-Z][a-zA-Z0-9-_\.]{1,20}$',
+                message='Неверное имя пользователя',
+                code='invalid_username'
+            ),
+            check_me_in_username
+        ]
+    )
+    avatar = models.ImageField(
+        upload_to='avatar/images/',
+        verbose_name='Картинка, закодированная в Base64',
+        blank=True,
+        null=True,
     )
 
-    # Логин через email
-    USERNAME_FIELD = 'email'
-    REQUIRED_FIELDS = ['username', 'first_name', 'last_name']
-
     class Meta:
-        verbose_name = 'Пользователь'
+        verbose_name = 'пользователь'
         verbose_name_plural = 'Пользователи'
         ordering = ('username',)
 
     def __str__(self):
-        return self.username
+        return f'{self.username} {self.email}'
 
 
-class Subscription(models.Model):
-    """Модель подписки пользователя на авторов."""
-
+class Follow(models.Model):
     user = models.ForeignKey(
-        User,
-        on_delete=models.CASCADE,
-        related_name='subscriber',
-        verbose_name='Подписчик'
+        User, on_delete=models.CASCADE,
+        related_name='follower'
     )
-    author = models.ForeignKey(
-        User,
-        on_delete=models.CASCADE,
-        related_name='subscribed',
-        verbose_name='Автор'
+    following = models.ForeignKey(
+        User, on_delete=models.CASCADE,
+        related_name='following'
     )
 
     class Meta:
-        verbose_name = 'Подписка'
+        verbose_name = 'Подписки'
         verbose_name_plural = 'Подписки'
-        constraints = [
+        ordering = ('user',)
+        constraints = (
             models.UniqueConstraint(
-                fields=['user', 'author'],
-                name='unique_subscription'
+                fields=('user', 'following'),
+                name='unique_following'
             ),
-            models.CheckConstraint(
-                check=~models.Q(user=models.F('author')),
-                name='prevent_self_subscription'
-            )
-        ]
+        )
 
     def __str__(self):
-        return f'{self.user} подписан на {self.author}'
+        return (f'{self.user}'
+                f' подписан на {self.following}')

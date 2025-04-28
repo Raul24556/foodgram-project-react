@@ -1,32 +1,20 @@
-"""
-Настройки Django для проекта Foodgram.
-
-Этот файл содержит конфигурацию Django, включая настройки базы данных,
-статических файлов, аутентификации, REST Framework и других компонентов.
-"""
-
+import os
 from pathlib import Path
 
-# Загружаем переменные окружения
-import os
+from django.core.management.utils import get_random_secret_key
 from dotenv import load_dotenv
 
-# Загрузка переменных окружения из файла .env
-load_dotenv()
+dotenv_path = os.path.join(os.path.dirname(__file__), '.env')
+load_dotenv(dotenv_path)
 
-# Базовая директория проекта
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-# Секретный ключ Django (берется из переменной окружения или используется значение по умолчанию)
-SECRET_KEY = os.getenv('SECRET_KEY', default='django-insecure-default-key')
+SECRET_KEY = os.getenv('SECRET_KEY', get_random_secret_key())
 
-# Режим отладки (берется из переменной окружения или используется значение по умолчанию)
-DEBUG = os.getenv('DEBUG', default='False') == 'False'
+DEBUG = os.getenv('DEBUG', 'False').lower() == 'true'
 
-# Разрешенные хосты (все хосты разрешены)
-ALLOWED_HOSTS = ['*']
+ALLOWED_HOSTS = os.getenv('ALLOWED_HOSTS_URL', '127.0.0.1 localhost').split()
 
-# Установленные приложения
 INSTALLED_APPS = [
     'django.contrib.admin',
     'django.contrib.auth',
@@ -34,16 +22,17 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
+    'drf_yasg',
     'rest_framework',
     'rest_framework.authtoken',
     'djoser',
     'django_filters',
-    'users',
-    'api',
-    'recipes',
+    'users.apps.UsersConfig',
+    'recipes.apps.RecipesConfig',
+    'api.apps.ApiConfig',
+    'CSV.apps.CsvConfig',
 ]
 
-# Промежуточные слои (middleware)
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
@@ -53,15 +42,14 @@ MIDDLEWARE = [
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
+AUTH_USER_MODEL = "users.User"
 
-# Корневой URL-конфиг
 ROOT_URLCONF = 'foodgram.urls'
-
-# Шаблоны
+TEMPLATES_DIR = BASE_DIR / 'templates'
 TEMPLATES = [
     {
         'BACKEND': 'django.template.backends.django.DjangoTemplates',
-        'DIRS': [],
+        'DIRS': [TEMPLATES_DIR],
         'APP_DIRS': True,
         'OPTIONS': {
             'context_processors': [
@@ -74,23 +62,31 @@ TEMPLATES = [
     },
 ]
 
-# WSGI-приложение
 WSGI_APPLICATION = 'foodgram.wsgi.application'
 
-# Настройки базы данных
-DATABASES = {
-    'default': {
-        'ENGINE': os.getenv('DB_ENGINE'),
-        'NAME': os.getenv('DB_NAME'),
-        'USER': os.getenv('POSTGRES_USER'),
-        'PASSWORD': os.getenv('POSTGRES_PASSWORD'),
-        'HOST': os.getenv('DB_HOST'),
-        'PORT': os.getenv('DB_PORT'),
+# Отладочный вывод для проверки переменных
+print("DEBUG_DB:", os.getenv('DEBUG_DB'))
+print("SQLITE_DB_PATH:", os.getenv('SQLITE_DB_PATH'))
+
+if os.getenv('DEBUG_DB', 'False').lower() == 'true':
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.sqlite3',
+            'NAME': BASE_DIR / os.getenv('SQLITE_DB_PATH', 'db.sqlite3'),
+        }
     }
-}
+else:
+    DATABASES = {
+        'default': {
+            'ENGINE': os.getenv('DATABASE_ENGINE', 'django.db.backends.postgresql'),
+            'NAME': os.getenv('DATABASE_NAME', 'foodgram'),
+            'USER': os.getenv('DATABASE_USER', 'raul2455'),
+            'PASSWORD': os.getenv('DATABASE_PASSWORD', 'viper2018'),
+            'HOST': os.getenv('DATABASE_HOST', 'localhost'),
+            'PORT': os.getenv('DATABASE_PORT', '5432'),
+        }
+    }
 
-
-# Валидаторы паролей
 AUTH_PASSWORD_VALIDATORS = [
     {
         'NAME': 'django.contrib.auth.password_validation.UserAttributeSimilarityValidator',
@@ -106,30 +102,25 @@ AUTH_PASSWORD_VALIDATORS = [
     },
 ]
 
-# Язык и временная зона
-LANGUAGE_CODE = 'ru-ru'
+
+LANGUAGE_CODE = 'ru-RU'
+
 TIME_ZONE = 'UTC'
+
 USE_I18N = True
-USE_L10N = True
+
 USE_TZ = True
 
-# Настройки статических файлов
+
 STATIC_URL = '/static/'
-STATIC_ROOT = os.path.join(BASE_DIR, 'static')
+STATIC_ROOT = BASE_DIR / 'collected_static'
 
-# Настройки медиафайлов
 MEDIA_URL = '/media/'
-MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
+MEDIA_ROOT = BASE_DIR / 'media'
 
-# Модель пользователя
-AUTH_USER_MODEL = 'users.User'
+DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
-# Настройки электронной почты
-EMAIL_BACKEND = 'django.core.mail.backends.filebased.EmailBackend'
-EMAIL_FILE_PATH = os.path.join(BASE_DIR, 'sent_emails')
-DEFAULT_FROM_EMAIL = 'admin@foodgram.com'
 
-# Настройки Django REST Framework
 REST_FRAMEWORK = {
     'DEFAULT_PERMISSION_CLASSES': [
         'rest_framework.permissions.IsAuthenticatedOrReadOnly',
@@ -137,31 +128,21 @@ REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': [
         'rest_framework.authentication.TokenAuthentication',
     ],
-    'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
+    'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.LimitOffsetPagination',
     'PAGE_SIZE': 6,
-}
+    'SEARCH_PARAM': 'name',
 
-# Настройки Djoser
+}
 DJOSER = {
     'LOGIN_FIELD': 'email',
-    'HIDE_USERS': False,
-    'SERIALIZERS': {
-        'user': 'api.serializers.UserSerializer',
-        'current_user': 'api.serializers.UserSerializer',
-        'user_create': 'api.serializers.UserSerializer',
-    },
-    'PERMISSIONS': {
-        'user': ('rest_framework.permissions.IsAuthenticated',),
-        'user_list': ('rest_framework.permissions.AllowAny',),
-    },
 }
 
-# Настройки для работы за прокси
-USE_X_FORWARDED_HOST = True
-SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
-
-# Автоматическое поле для моделей
-DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
-
-# Название сайта
-SITE_NAME = 'foodgramraul245.strangled.net'
+SWAGGER_SETTINGS = {
+    'SECURITY_DEFINITIONS': {
+        'Bearer': {
+            'type': 'apiKey',
+            'name': 'Authorization',
+            'in': 'header'
+        }
+    }
+}

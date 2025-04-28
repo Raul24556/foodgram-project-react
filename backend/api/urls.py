@@ -1,39 +1,20 @@
-"""Маршруты для API приложения."""
-
 from django.urls import include, path
-from rest_framework.routers import DefaultRouter
+from rest_framework import routers
 
-from api.views import IngredientsViewSet, RecipesViewSet, TagsViewSet
+from api.views import IngredientViewSet, RecipesViewSet, TagSlugViewSet
+from users.views import FollowViewSet, UserSubscribeView, UserViewSet
 
-# Определяем app_name для использования namespace
-app_name = "api"
+app_name = 'api'
 
-# Создаем экземпляр DefaultRouter для автоматической генерации URL
-router = DefaultRouter()
+router = routers.DefaultRouter()
+router.register('users', UserViewSet, basename='users')
+router.register('tags', TagSlugViewSet, basename='tags')
+router.register('ingredients', IngredientViewSet, basename='ingredient')
+router.register('recipes', RecipesViewSet, basename='recipes')
 
-# Регистрируем ViewSet для ингредиентов
-router.register(
-    r'ingredients',  # Префикс URL
-    IngredientsViewSet,  # ViewSet
-    basename='ingredients'  # Базовое имя для URL
-)
-
-# Регистрируем ViewSet для тегов
-router.register(
-    r'tags',  # Префикс URL
-    TagsViewSet,  # ViewSet
-    basename='tags'  # Базовое имя для URL
-)
-
-# Регистрируем ViewSet для рецептов
-router.register(
-    r'recipes',  # Префикс URL
-    RecipesViewSet,  # ViewSet
-    basename='recipes'  # Базовое имя для URL
-)
-
-# Основные URL-маршруты
 urlpatterns = [
-    # Включаем маршруты, сгенерированные роутером
+    path(r'users/subscriptions/', FollowViewSet.as_view({'get': 'list'})),
+    path(r'users/<int:user_id>/subscribe/', UserSubscribeView.as_view()),
     path('', include(router.urls)),
+    path('auth/', include('djoser.urls.authtoken')),
 ]

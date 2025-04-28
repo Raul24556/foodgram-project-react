@@ -1,28 +1,37 @@
 from django.contrib import admin
-from django.urls import include, path
-from django.http import HttpResponse
+from django.urls import include, path, re_path
+from drf_yasg import openapi
+from drf_yasg.views import get_schema_view
+from rest_framework import permissions
 
+from api.views import load_url
 
-def index(request):
-    return HttpResponse("""
-        <html>
-        <head>
-            <title>Foodgram</title>
-        </head>
-        <body>
-            <h1>Добро пожаловать в Foodgram!</h1>
-            <p>Это главная страница вашего проекта.</p>
-            <p>Перейдите в <a href="/api/">API</a> или
-            <a href="/admin/">админку</a>.</p>
-        </body>
-        </html>
-    """)
+schema_view = get_schema_view(
+    openapi.Info(
+        title="Foodgram API",
+        default_version='v1',
+        description="Документация для приложения foodgram",
+        contact=openapi.Contact(email="westy8999@yandex.ru"),
+        license=openapi.License(name="BSD License"),
+    ),
+    public=True,
+    permission_classes=(permissions.AllowAny,),
+)
 
 
 urlpatterns = [
-    path("", index, name="index"),
-    path("api/", include("api.urls", namespace="api")),
-    # Убираем эту строчку:  path("api/", include("users.urls")),
-    path("admin/", admin.site.urls),
-    path("auth/", include("djoser.urls.authtoken")),
+    path('api/', include('api.urls')),
+    path('admin/', admin.site.urls),
+    path('s/<str:short_link>/', load_url)
 ]
+
+# Swagger
+urlpatterns += [
+    re_path(r'^swagger(?P<format>\.json|\.yaml)$',
+            schema_view.without_ui(cache_timeout=0), name='schema-json'),
+    re_path(r'^swagger/$', schema_view.with_ui('swagger', cache_timeout=0),
+            name='schema-swagger-ui'),
+    re_path(r'^redoc/$', schema_view.with_ui('redoc', cache_timeout=0),
+            name='schema-redoc'),
+]
+# / Swagger

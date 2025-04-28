@@ -2,8 +2,6 @@ from django.apps import AppConfig
 
 
 class RecipesConfig(AppConfig):
-    # Указываем имя приложения
+    default_auto_field = 'django.db.models.BigAutoField'
     name = 'recipes'
-
-    # Настраиваем человекочитаемое имя для отображения в админке
-    verbose_name = 'Управление рецептами'
+    verbose_name = 'Рецепты'
