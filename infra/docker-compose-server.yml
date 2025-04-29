@@ -9,12 +9,19 @@ services:
       dockerfile: Dockerfile
     restart: unless-stopped
     volumes:
-      - static_content:/app/static/  # Статические файлы бэкенда
-      - media_content:/app/media/    # Медиафайлы (изображения рецептов, аватарки)
+      - static_content:/app/collected_static/  # Изменено для соответствия STATIC_ROOT
+      - media_content:/app/media/             # Медиафайлы
     depends_on:
       - database
     env_file:
       - ./config/.env
+    environment:
+      - DEBUG=False  # Для продакшена
+      - ALLOWED_HOSTS=localhost,127.0.0.1,webserver
+    command: >
+      sh -c "python manage.py migrate &&
+             python manage.py collectstatic --noinput &&
+             gunicorn --bind 0.0.0.0:8000 foodgram.wsgi:application"
     networks:
       - app_network
 
@@ -22,11 +29,11 @@ services:
   database:
     image: postgres:17
     volumes:
-      - db_data:/var/lib/postgresql/data/  # Хранение данных базы
+      - db_data:/var/lib/postgresql/data/
     environment:
-      POSTGRES_USER: ${POSTGRES_USER:-foodgram_user}      # Имя пользователя
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-foodgram_password}  # Пароль
-      POSTGRES_DB: ${POSTGRES_DB:-foodgram_db}            # Название базы
+      POSTGRES_USER: ${POSTGRES_USER:-foodgram_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-foodgram_password}
+      POSTGRES_DB: ${POSTGRES_DB:-foodgram_db}
     env_file:
       - ./config/.env
     restart: unless-stopped
@@ -35,32 +42,30 @@ services:
 
   # Сервис Nginx (веб-сервер и прокси)
   webserver:
-    image: nginx:1.25  # Используем свежую версию Nginx
+    image: nginx:1.25
     ports:
-      - "8080:80"    # HTTP порт
-      - "8443:443"   # HTTPS порт
+      - "8080:80"
+      - "8443:443"
     volumes:
-      - ./config/nginx.conf:/etc/nginx/conf.d/default.conf  # Конфигурация Nginx
-      - ./frontend/build:/usr/share/nginx/html/            # Статические файлы фронтенда
-      - ./docs:/usr/share/nginx/html/api/docs              # Документация API
-      - static_content:/var/html/static/                   # Статические файлы бэкенда
-      - media_content:/var/html/media/                     # Медиафайлы
-      - ./certs:/etc/nginx/certs:ro                        # SSL-сертификаты
-      - nginx_logs:/var/log/nginx                          # Логи Nginx
+      - ./config/nginx.conf:/etc/nginx/conf.d/default.conf
+      - ./frontend/build:/usr/share/nginx/html/
+      - ./docs:/usr/share/nginx/html/api/docs
+      - static_content:/var/html/static/
+      - media_content:/var/html/media/
+      - ./certs:/etc/nginx/certs:ro
+      - nginx_logs:/var/log/nginx
     depends_on:
       - app_backend
     restart: unless-stopped
     networks:
       - app_network
 
-# Определение томов для хранения данных
 volumes:
-  static_content:    # Для статических файлов
-  media_content:     # Для медиафайлов
-  db_data:           # Для данных базы
-  nginx_logs:        # Для логов Nginx
+  static_content:
+  media_content:
+  db_data:
+  nginx_logs:
 
-# Определение сети
 networks:
   app_network:
     driver: bridge
