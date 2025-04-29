@@ -1,0 +1,71 @@
+version: '3.8'
+
+services:
+  # Сервис бэкенда (Django)
+  app_backend:
+    image: raul24556/foodgram_backend:1.1
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    volumes:
+      - static_content:/app/collected_static/  # Изменено для соответствия STATIC_ROOT
+      - media_content:/app/media/             # Медиафайлы
+    depends_on:
+      - database
+    env_file:
+      - ./config/.env
+    environment:
+      - DEBUG=False  # Для продакшена
+      - ALLOWED_HOSTS=localhost,127.0.0.1,webserver
+    command: >
+      sh -c "python manage.py migrate &&
+             python manage.py collectstatic --noinput &&
+             gunicorn --bind 0.0.0.0:8000 foodgram.wsgi:application"
+    networks:
+      - app_network
+
+  # Сервис базы данных (PostgreSQL)
+  database:
+    image: postgres:17
+    volumes:
+      - db_data:/var/lib/postgresql/data/
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-foodgram_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-foodgram_password}
+      POSTGRES_DB: ${POSTGRES_DB:-foodgram_db}
+    env_file:
+      - ./config/.env
+    restart: unless-stopped
+    networks:
+      - app_network
+
+  # Сервис Nginx (веб-сервер и прокси)
+  webserver:
+    image: nginx:1.25
+    ports:
+      - "8080:80"
+      - "8443:443"
+    volumes:
+      - ./config/nginx.conf:/etc/nginx/conf.d/default.conf
+      - ./frontend/build:/usr/share/nginx/html/
+      - ./docs:/usr/share/nginx/html/api/docs
+      - static_content:/var/html/static/
+      - media_content:/var/html/media/
+      - ./certs:/etc/nginx/certs:ro
+      - nginx_logs:/var/log/nginx
+    depends_on:
+      - app_backend
+    restart: unless-stopped
+    networks:
+      - app_network
+
+volumes:
+  static_content:
+  media_content:
+  db_data:
+  nginx_logs:
+
+networks:
+  app_network:
+    driver: bridge
