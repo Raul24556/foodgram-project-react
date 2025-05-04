@@ -1,15 +1,13 @@
 import random
 import string
-
 from django.contrib.auth import get_user_model
-from django.core.exceptions import ObjectDoesNotExist
 from django.core.validators import MinValueValidator
 from django.db import models
-
-from core.constants import (AMOUNT_INGREDIENT, COOKING_TIME_MIN,
-                            INGREDIENT_MASUREMENT_UNIT, INGREDIENT_NAME,
-                            RECIPE_NAME_MAX_LENGTH, SHORT_LINK_ID_LENGTH,
-                            SHORT_LINK_URL_FIELD, TAG_SLUG_NAME_MAX_LENGTH)
+from foodgram.settings import SHORT_LINK_LENGTH
+from recipes.constants import (
+    AMOUNT_INGREDIENT, COOKING_TIME_MIN, INGREDIENT_MASUREMENT_UNIT,
+    INGREDIENT_NAME, RECIPE_NAME_MAX_LENGTH, TAG_SLUG_NAME_MAX_LENGTH
+)
 
 User = get_user_model()
 
@@ -38,7 +36,7 @@ class TagSlug(models.Model):
 class Ingredient(models.Model):
     name = models.CharField(
         max_length=INGREDIENT_NAME,
-        verbose_name='Название ингридиента',
+        verbose_name='Название ингредиента',
     )
     measurement_unit = models.CharField(
         max_length=INGREDIENT_MASUREMENT_UNIT,
@@ -48,7 +46,7 @@ class Ingredient(models.Model):
     class Meta:
         verbose_name = 'Ингредиент'
         verbose_name_plural = 'Ингредиенты'
-        ordering = ("name", )
+        ordering = ("name",)
         constraints = [
             models.UniqueConstraint(
                 fields=('name', 'measurement_unit'),
@@ -96,6 +94,13 @@ class Recipe(models.Model):
     pub_date = models.DateTimeField(
         'Дата публикации', auto_now_add=True
     )
+    short_link = models.CharField(
+        max_length=SHORT_LINK_LENGTH,
+        unique=True,
+        blank=True,
+        null=True,
+        verbose_name='Короткая ссылка'
+    )
 
     class Meta:
         verbose_name = 'Рецепт'
@@ -105,6 +110,19 @@ class Recipe(models.Model):
 
     def __str__(self):
         return self.name
+
+    def generate_short_link(self):
+        characters = string.ascii_letters + string.digits
+        while True:
+            short_link = ''.join(random.choice(characters)
+                                 for _ in range(SHORT_LINK_LENGTH))
+            if not Recipe.objects.filter(short_link=short_link).exists():
+                return short_link
+
+    def save(self, *args, **kwargs):
+        if not self.short_link and not self.pk:
+            self.short_link = self.generate_short_link()
+        super().save(*args, **kwargs)
 
 
 class IngredientsRecipe(models.Model):
@@ -121,13 +139,13 @@ class IngredientsRecipe(models.Model):
     amount = models.PositiveIntegerField(
         validators=[MinValueValidator(
             AMOUNT_INGREDIENT,
-            'Минимальное время приготовления'
+            'Минимальное количество ингредиента'
         )],
     )
 
     class Meta:
-        verbose_name = 'Ингредиентов в рецепе'
-        verbose_name_plural = 'Ингредиентов в рецепе'
+        verbose_name = 'Ингредиент в рецепте'
+        verbose_name_plural = 'Ингредиенты в рецепте'
         default_related_name = 'ingredient_recipes'
         ordering = ("recipe",)
         constraints = [
@@ -138,107 +156,51 @@ class IngredientsRecipe(models.Model):
         ]
 
     def __str__(self):
-        return (f'Ингредиент {self.ingredients} в {self.recipe}в'
-                f' количистве {self.amount}')
+        return (
+            f'Ингредиент {self.ingredients} в {self.recipe} '
+            f'в количестве {self.amount}'
+        )
 
 
-class ShoppingCart(models.Model):
+class UserRecipeBase(models.Model):
     user = models.ForeignKey(
         User,
         on_delete=models.CASCADE,
-        verbose_name='Автор',
+        verbose_name='Пользователь',
     )
-
     recipe = models.ForeignKey(
         Recipe,
         on_delete=models.CASCADE,
         verbose_name='Рецепт'
     )
 
+    class Meta:
+        abstract = True
+        constraints = [
+            models.UniqueConstraint(
+                fields=('user', 'recipe'),
+                name='unique_%(class)s'
+            )
+        ]
+
+
+class ShoppingCart(UserRecipeBase):
     class Meta:
         verbose_name = 'Список покупок'
         verbose_name_plural = 'Списки покупок'
         default_related_name = 'shopping_carts'
         ordering = ("user",)
-        constraints = (
-            models.UniqueConstraint(
-                fields=('user', 'recipe'),
-                name='unique_cartshop'
-            ),
-        )
 
     def __str__(self):
-        return (f'Рецепт {self.recipe}'
-                f' в корзине у пользователя {self.user}')
+        return f'Рецепт {self.recipe} в корзине у пользователя {self.user}'
 
 
-class FavoritRecipe(models.Model):
-    user = models.ForeignKey(
-        User,
-        on_delete=models.CASCADE,
-        verbose_name='Автор',
-    )
-
-    recipe = models.ForeignKey(
-        Recipe,
-        on_delete=models.CASCADE,
-        verbose_name='Рецепт'
-    )
-
+class FavoritRecipe(UserRecipeBase):
     class Meta:
-        verbose_name = 'Избанное'
+        verbose_name = 'Избранное'
         verbose_name_plural = 'Избранные'
-        default_related_name = 'favotit_recipes'
+        default_related_name = 'favorite_recipes'
         ordering = ("user",)
-        constraints = (
-            models.UniqueConstraint(
-                fields=('user', 'recipe'),
-                name='unique_recipes'
-            ),
-        )
 
     def __str__(self):
-        return (f'Рецепт {self.recipe}'
-                f' в избранном у пользователя {self.user}')
-
-
-class ShortUrlModel(models.Model):
-    short_link = models.CharField(
-        max_length=SHORT_LINK_URL_FIELD,
-        unique=True,
-        verbose_name='Коротка ссылка',
-    )
-    url = models.URLField(
-        verbose_name='Полная ссылка',)
-
-    @classmethod
-    def generate_short_link(cls):
-        CHARACTERS = (
-            string.ascii_uppercase
-            + string.ascii_lowercase
-            + string.digits
-        )
-        while True:
-            short_link = ''.join(
-                random.choice(CHARACTERS)
-                for _ in range(SHORT_LINK_ID_LENGTH)
-            )
-            try:
-                cls.objects.get(short_link=short_link)
-            except ObjectDoesNotExist:
-                return short_link
-
-    class Meta:
-        verbose_name = 'Короткая ссылка'
-        verbose_name_plural = 'Короткие ссылки'
-        ordering = ("url", )
-        constraints = (
-            models.UniqueConstraint(
-                fields=('short_link', 'url'),
-                name='unique_urls'
-            ),
-        )
-
-    def __str__(self):
-        return (f'Короткая ссылка: {self.short_link}'
-                f' для ссылки {self.url}')
+        return f'Рецепт {self.recipe} в избранном у пользователя {self.user}'

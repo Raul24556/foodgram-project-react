@@ -4,8 +4,6 @@ from drf_yasg import openapi
 from drf_yasg.views import get_schema_view
 from rest_framework import permissions
 
-from api.views import load_url
-
 schema_view = get_schema_view(
     openapi.Info(
         title="Foodgram API",
@@ -18,14 +16,11 @@ schema_view = get_schema_view(
     permission_classes=(permissions.AllowAny,),
 )
 
-
 urlpatterns = [
     path('api/', include('api.urls')),
     path('admin/', admin.site.urls),
-    path('s/<str:short_link>/', load_url)
 ]
 
-# Swagger
 urlpatterns += [
     re_path(r'^swagger(?P<format>\.json|\.yaml)$',
             schema_view.without_ui(cache_timeout=0), name='schema-json'),
@@ -34,4 +29,3 @@ urlpatterns += [
     re_path(r'^redoc/$', schema_view.with_ui('redoc', cache_timeout=0),
             name='schema-redoc'),
 ]
-# / Swagger
