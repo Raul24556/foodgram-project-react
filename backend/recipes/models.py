@@ -1,15 +1,38 @@
 import random
 import string
+
+from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.core.validators import MinValueValidator
 from django.db import models
-from foodgram.settings import SHORT_LINK_LENGTH
+from django.db.models import Exists, OuterRef
+
 from recipes.constants import (
     AMOUNT_INGREDIENT, COOKING_TIME_MIN, INGREDIENT_MASUREMENT_UNIT,
     INGREDIENT_NAME, RECIPE_NAME_MAX_LENGTH, TAG_SLUG_NAME_MAX_LENGTH
 )
 
 User = get_user_model()
+
+
+class RecipeManager(models.Manager):
+    def annotate_for_user(self, user):
+        queryset = self.get_queryset()
+        if user.is_authenticated:
+            return queryset.annotate(
+                is_favorited=Exists(
+                    FavoritRecipe.objects.filter(
+                        user=user, recipe=OuterRef('pk'))
+                ),
+                is_in_shopping_cart=Exists(
+                    ShoppingCart.objects.filter(
+                        user=user, recipe=OuterRef('pk'))
+                )
+            )
+        return queryset.annotate(
+            is_favorited=Exists(FavoritRecipe.objects.none()),
+            is_in_shopping_cart=Exists(ShoppingCart.objects.none())
+        )
 
 
 class TagSlug(models.Model):
@@ -95,12 +118,14 @@ class Recipe(models.Model):
         'Дата публикации', auto_now_add=True
     )
     short_link = models.CharField(
-        max_length=SHORT_LINK_LENGTH,
+        max_length=settings.SHORT_LINK_LENGTH,
         unique=True,
         blank=True,
         null=True,
         verbose_name='Короткая ссылка'
     )
+
+    objects = RecipeManager()
 
     class Meta:
         verbose_name = 'Рецепт'
@@ -115,12 +140,12 @@ class Recipe(models.Model):
         characters = string.ascii_letters + string.digits
         while True:
             short_link = ''.join(random.choice(characters)
-                                 for _ in range(SHORT_LINK_LENGTH))
+                                 for _ in range(settings.SHORT_LINK_LENGTH))
             if not Recipe.objects.filter(short_link=short_link).exists():
                 return short_link
 
     def save(self, *args, **kwargs):
-        if not self.short_link and not self.pk:
+        if not self.short_link:
             self.short_link = self.generate_short_link()
         super().save(*args, **kwargs)
 

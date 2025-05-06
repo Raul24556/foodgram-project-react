@@ -1,18 +1,16 @@
+import logging
 from http import HTTPStatus
+
 from django.shortcuts import get_object_or_404
-from django.urls import reverse
 from django_filters.rest_framework import DjangoFilterBackend
-from rest_framework import status, viewsets, mixins
-from rest_framework.filters import SearchFilter
-from rest_framework.decorators import action
-from rest_framework.permissions import (
-    IsAuthenticatedOrReadOnly, SAFE_METHODS, AllowAny, IsAuthenticated
-)
-from rest_framework.response import Response
-from django.db.models import Exists, OuterRef
-from django.http import HttpResponseRedirect
-from django.views.decorators.http import require_GET
 from djoser.views import UserViewSet as DjoserUserViewSet
+from rest_framework import mixins, status, viewsets
+from rest_framework.decorators import action
+from rest_framework.filters import SearchFilter
+from rest_framework.permissions import (AllowAny,
+                                        IsAuthenticated,
+                                        IsAuthenticatedOrReadOnly)
+from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from api.filters import RecipeFilter
@@ -20,15 +18,16 @@ from api.form_text import download
 from api.pagination import RecipePagination
 from api.permissions import IsAuthorOrReadOnly
 from api.serializers import (
-    FavoritRecipesSerializer, IngredientSerializer, RecipeCreateSerializer,
-    RecipesListSerializer, ShoppingCartSerializer, TagSlugSerializer,
-    AvatarSerializer, FollowSerializer, UserSubscribesSerializer
+    AvatarSerializer, FavoritRecipesSerializer, FollowSerializer,
+    IngredientSerializer, RecipeCreateSerializer, RecipesListSerializer,
+    ShoppingCartSerializer, TagSlugSerializer, UserSubscribesSerializer
 )
-from recipes.models import (
-    FavoritRecipe, Ingredient, Recipe, ShoppingCart, TagSlug
-)
-from users.models import User, Follow
-from foodgram.settings import SHORT_LINK_LENGTH
+from recipes.models import (FavoritRecipe,
+                            Ingredient, Recipe,
+                            ShoppingCart, TagSlug)
+from users.models import Follow, User
+
+logger = logging.getLogger(__name__)
 
 
 class TagSlugViewSet(mixins.RetrieveModelMixin,
@@ -60,60 +59,14 @@ class RecipesViewSet(viewsets.ModelViewSet):
     http_method_names = ['get', 'post', 'patch', 'delete']
 
     def get_queryset(self):
-        queryset = Recipe.objects.all()
-        # Добавляем аннотацию для всех пользователей
-        if self.request.user.is_authenticated:
-            queryset = queryset.annotate(
-                is_favorited=Exists(
-                    FavoritRecipe.objects.filter(
-                        user=self.request.user, recipe=OuterRef('pk'))
-                ),
-                is_in_shopping_cart=Exists(
-                    ShoppingCart.objects.filter(
-                        user=self.request.user, recipe=OuterRef('pk'))
-                )
-            )
-        else:
-            # Для неавторизованных пользователей
-            # добавляем поля со значением False
-            queryset = queryset.annotate(
-                is_favorited=Exists(
-                    FavoritRecipe.objects.none()
-                ),
-                is_in_shopping_cart=Exists(
-                    ShoppingCart.objects.none()
-                )
-            )
-
-        # Фильтрация по параметрам is_favorited и is_in_shopping_cart
-        is_favorited = self.request.query_params.get('is_favorited', None)
-        if is_favorited == '1':
-            if self.request.user.is_authenticated:
-                favorited_recipe_ids = FavoritRecipe.objects.filter(
-                    user=self.request.user).values_list('recipe_id', flat=True)
-                queryset = queryset.filter(id__in=favorited_recipe_ids)
-            else:
-                queryset = queryset.none()
-
-        is_in_shopping_cart = self.request.query_params.get(
-            'is_in_shopping_cart', None)
-        if is_in_shopping_cart == '1':
-            if self.request.user.is_authenticated:
-                cart_recipe_ids = ShoppingCart.objects.filter(
-                    user=self.request.user).values_list('recipe_id', flat=True)
-                queryset = queryset.filter(id__in=cart_recipe_ids)
-            else:
-                queryset = queryset.none()
-
-        return queryset
+        return Recipe.objects.annotate_for_user(self.request.user)
 
     def get_serializer_class(self):
-        if self.request.method in SAFE_METHODS:
+        if self.request.method in ['GET']:
             return RecipesListSerializer
         return RecipeCreateSerializer
 
     def get_serializer_context(self):
-        # Передаем контекст с запросом для сериализатора
         context = super().get_serializer_context()
         context.update({"request": self.request})
         return context
@@ -121,9 +74,10 @@ class RecipesViewSet(viewsets.ModelViewSet):
     @action(["get"], detail=True, url_path='get-link')
     def get_link(self, request, pk):
         """Генерация короткой ссылки."""
+        from django.conf import settings
         recipe = get_object_or_404(Recipe, pk=pk)
         short_link = recipe.short_link
-        if not short_link or len(short_link) != SHORT_LINK_LENGTH:
+        if not short_link or len(short_link) != settings.SHORT_LINK_LENGTH:
             return Response(
                 {'errors': 'Короткая ссылка отсутствует или некорректна'},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
@@ -233,13 +187,3 @@ class UserSubscribeView(APIView):
                 status=status.HTTP_400_BAD_REQUEST
             )
         return Response(status=status.HTTP_204_NO_CONTENT)
-
-
-@require_GET
-def load_url(request, short_link):
-    """Перенаправление с короткой ссылки на страницу рецепта."""
-    recipe = get_object_or_404(Recipe, short_link=short_link)
-    return HttpResponseRedirect(
-        request.build_absolute_uri(reverse('recipes-detail',
-                                           kwargs={'pk': recipe.id}))
-    )
