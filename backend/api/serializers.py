@@ -106,9 +106,16 @@ class RecipeCreateSerializer(serializers.ModelSerializer):
                 "Нельзя добавить одинаковые теги")
         return tags
 
+    def validate_image(self, image):
+        """Проверка, что изображение не пустое при создании рецепта."""
+        if self.instance is None and not image:
+            raise serializers.ValidationError(
+                "Изображение обязательно при создании рецепта.")
+        return image
+
     def validate(self, data):
         required_fields = ['ingredient_recipes', 'tags',
-                           'name', 'text', 'cooking_time', 'image']
+                           'name', 'text', 'cooking_time']
         errors = {}
         for field in required_fields:
             if field not in data or data[field] is None or (
@@ -117,8 +124,8 @@ class RecipeCreateSerializer(serializers.ModelSerializer):
         if errors:
             raise serializers.ValidationError(errors)
         if 'ingredient_recipes' in data and len(
-                data.get('ingredient_recipes')) != len(set(
-                    [ing_id['id'] for ing_id in data.get('ingredient_recipes')]
+                data['ingredient_recipes']) != len(set(
+                    [ing['id'] for ing in data['ingredient_recipes']]
                 )):
             raise serializers.ValidationError(
                 "Нельзя добавить одинаковые ингредиенты")
@@ -146,12 +153,13 @@ class RecipeCreateSerializer(serializers.ModelSerializer):
 
     @transaction.atomic
     def update(self, instance, validated_data):
-        ingredients = validated_data.pop('ingredient_recipes')
-        tags = validated_data.pop('tags')
-        instance.tags.clear()
-        instance.tags.set(tags)
-        IngredientsRecipe.objects.filter(recipe=instance).delete()
-        self.add_ingredients(ingredients, instance)
+        ingredients = validated_data.pop('ingredient_recipes', None)
+        tags = validated_data.pop('tags', None)
+        if tags is not None:
+            instance.tags.set(tags)
+        if ingredients is not None:
+            IngredientsRecipe.objects.filter(recipe=instance).delete()
+            self.add_ingredients(ingredients, instance)
         return super().update(instance, validated_data)
 
     def to_representation(self, instance):
