@@ -1,0 +1,55 @@
+volumes:
+  foodgram_pg_data:
+  foodgram_media:
+  foodgram_frontend_static:
+  foodgram_backend_static:
+
+services:
+  db:
+    image: postgres:13
+    env_file: .env
+    volumes:
+      - foodgram_pg_data:/var/lib/postgresql/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    image: raul2455/foodgram-backend
+    env_file: .env
+    volumes:
+      - foodgram_backend_static:/backend_static
+      - foodgram_media:/app/media
+    depends_on:
+      - db
+    command: ["sh", "-c", "python manage.py migrate --noinput && python manage.py collectstatic --noinput && cp -r /app/collected_static/. /backend_static/ && gunicorn --bind 0.0.0.0:8000 foodgram.wsgi:application"]
+    restart: unless-stopped
+    expose:
+      - 8000
+
+  frontend:
+    image: raul2455/foodgram-frontend
+    env_file: .env
+    volumes:
+      - foodgram_frontend_static:/frontend_static
+    command: ["sh", "-c", "cp -r /app/build/. /frontend_static/ && sleep infinity"]
+    restart: unless-stopped
+    depends_on:
+      - backend
+
+  gateway:
+    image: raul2455/foodgram-gateway
+    env_file: .env
+    ports:
+      - "9000:80"
+    volumes:
+      - foodgram_frontend_static:/staticfiles
+      - foodgram_backend_static:/backend_static
+      - foodgram_media:/app/media
+    depends_on:
+      - backend
+      - frontend
+    restart: unless-stopped

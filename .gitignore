@@ -1,0 +1,78 @@
+# Исключение временных файлов и папок IDE
+.idea/
+.vscode/
+
+# Исключение временных файлов Python
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Исключение временных файлов Node.js
+frontend/node_modules/
+infra/frontend/build/
+
+# Исключение файлов окружения
+.env
+*.env
+
+# Исключение статических и медиафайлов
+static/
+media/
+
+# Исключение временных файлов и папок для тестов
+htmlcov/
+.tox/
+.nox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+*.py,cover
+.hypothesis/
+.pytest_cache/
+
+# Исключение логов и временных файлов
+*.log
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Исключение файлов сборки и дистрибуции
+build/
+dist/
+*.egg-info/
+.eggs/
+
+# Исключение файлов конфигурации и временных файлов
+local_settings.py
+db.sqlite3
+db.sqlite3-journal
+
+# Исключение временных файлов Jupyter Notebook
+.ipynb_checkpoints/
+
+# Исключение временных файлов Sphinx
+/docs/_build/
+
+# Исключение временных файлов mypy
+.mypy_cache/
+.dmypy.json
+dmypy.json
+
+# Исключение временных файлов pyenv
+.python-version
+
+# Исключение временных файлов pipenv
+Pipfile.lock
+
+# Исключение временных файлов Celery
+celerybeat-schedule
+celerybeat.pid
+
+# Исключение временных файлов mkdocs
+/site
+
+# Исключение временных файлов Pyre
+.pyre/
+node_modules
